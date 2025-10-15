@@ -6,7 +6,14 @@ let isDrawing = false;
 let brushColor = '#00ffff';
 let brushSize = 5;
 let tintColor = '#ff00ff';
-let isErasing = false; 
+let isErasing = false;
+
+const defaultImg = new Image();
+defaultImg.src = 'a.jpg'; // Ruta de tu imagen predeterminada
+defaultImg.onload = () => {
+  ctx.drawImage(defaultImg, 0, 0, canvas.width, canvas.height);
+  originalImageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+};
 
 // Cargar imagen
 fileInput.addEventListener('change', e => {
@@ -24,10 +31,11 @@ fileInput.addEventListener('change', e => {
   reader.readAsDataURL(file);
 });
 
-// Filtros básicos
+// Funciones básicas
 function getImgData() { return ctx.getImageData(0,0,canvas.width,canvas.height); }
 function putImgData(d){ ctx.putImageData(d,0,0); }
 
+// Filtros rápidos
 document.getElementById('btnGray').onclick = () => {
   const id = getImgData(); const d = id.data;
   for(let i=0;i<d.length;i+=4){
@@ -74,21 +82,37 @@ document.getElementById('btnPixel').onclick = () => {
   ctx.imageSmoothingEnabled = true;
 };
 
-// Brillo y contraste
+// Brillo y Contraste
 const brightness = document.getElementById('brightness');
 const contrast = document.getElementById('contrast');
-document.getElementById('btnApplyBC').onclick = () => {
+const bVal = document.getElementById('bVal');
+const cVal = document.getElementById('cVal');
+
+function applyBrightnessContrast() {
+  if (!originalImageData) return;
   const b = parseInt(brightness.value);
   const c = parseInt(contrast.value);
-  const id = getImgData(); const d = id.data;
+  const id = ctx.createImageData(originalImageData); 
+  id.data.set(originalImageData.data); // Clonamos original
+  const d = id.data;
   const factor = (259 * (c + 255)) / (255 * (259 - c));
   for(let i=0;i<d.length;i+=4){
-    d[i] = factor*(d[i]-128)+128 + b;
-    d[i+1] = factor*(d[i+1]-128)+128 + b;
-    d[i+2] = factor*(d[i+2]-128)+128 + b;
+    d[i]     = factor*(d[i]-128)+128 + b;
+    d[i+1]   = factor*(d[i+1]-128)+128 + b;
+    d[i+2]   = factor*(d[i+2]-128)+128 + b;
   }
   putImgData(id);
-};
+}
+
+// Actualización en tiempo real
+brightness.addEventListener('input', () => {
+  bVal.textContent = brightness.value;
+  applyBrightnessContrast();
+});
+contrast.addEventListener('input', () => {
+  cVal.textContent = contrast.value;
+  applyBrightnessContrast();
+});
 
 // Dibujo
 const brushVal = document.getElementById('brushVal');
@@ -97,10 +121,7 @@ document.getElementById('brushSize').oninput = e => {
   brushVal.textContent = brushSize;
 };
 
-function startDraw(e){
-  isDrawing = true;
-  draw(e);
-}
+function startDraw(e){ isDrawing=true; draw(e); }
 function draw(e){
   if(!isDrawing) return;
   const rect = canvas.getBoundingClientRect();
@@ -111,25 +132,22 @@ function draw(e){
   ctx.arc(x, y, brushSize, 0, Math.PI*2);
   ctx.fill();
 }
-function endDraw(){ isDrawing = false; }
+function endDraw(){ isDrawing=false; }
 
-
-// Botón dibujar
+// Herramientas
 document.getElementById('btnDraw').onclick = () => {
-  isErasing = false;
-  canvas.onmousedown = startDraw;
-  canvas.onmousemove = draw;
-  canvas.onmouseup = endDraw;
-  canvas.onmouseleave = endDraw;
+  isErasing=false;
+  canvas.onmousedown=startDraw;
+  canvas.onmousemove=draw;
+  canvas.onmouseup=endDraw;
+  canvas.onmouseleave=endDraw;
 };
-
-// Botón borrar
 document.getElementById('btnErase').onclick = () => {
-  isErasing = true;
-  canvas.onmousedown = startDraw;
-  canvas.onmousemove = draw;
-  canvas.onmouseup = endDraw;
-  canvas.onmouseleave = endDraw;
+  isErasing=true;
+  canvas.onmousedown=startDraw;
+  canvas.onmousemove=draw;
+  canvas.onmouseup=endDraw;
+  canvas.onmouseleave=endDraw;
 };
 
 // Paletas
@@ -139,7 +157,7 @@ const tints = ['#00ffff','#ff00ff','#ff0077','#ffaa00','#00ff55','#00aaff','#ff3
 const palette = document.getElementById('palette');
 colors.forEach(c=>{
   const div = document.createElement('div');
-  div.style.background = c;
+  div.style.background=c;
   div.onclick = ()=>brushColor=c;
   palette.appendChild(div);
 });
@@ -147,30 +165,45 @@ colors.forEach(c=>{
 const tintPalette = document.getElementById('tintPalette');
 tints.forEach(c=>{
   const div = document.createElement('div');
-  div.style.background = c;
+  div.style.background=c;
   div.onclick = ()=>tintColor=c;
   tintPalette.appendChild(div);
 });
 
 document.getElementById('btnTint').onclick = () => {
-  const id = getImgData(); const d = id.data;
+  const id = getImgData(); 
+  const d = id.data;
   const tint = hexToRgb(tintColor);
   for(let i=0;i<d.length;i+=4){
-    d[i] = (d[i] + tint.r) / 2;
-    d[i+1] = (d[i+1] + tint.g) / 2;
-    d[i+2] = (d[i+2] + tint.b) / 2;
+    d[i]   = (d[i] + tint.r)/2;
+    d[i+1] = (d[i+1] + tint.g)/2;
+    d[i+2] = (d[i+2] + tint.b)/2;
   }
   putImgData(id);
 };
 
 function hexToRgb(hex){
-  const n = parseInt(hex.slice(1), 16);
+  const n=parseInt(hex.slice(1),16);
   return { r:(n>>16)&255, g:(n>>8)&255, b:n&255 };
 }
 
 // Reset y descarga
 document.getElementById('btnReset').onclick = () => {
-  if (originalImageData) putImgData(originalImageData);
+  if(originalImageData){
+    putImgData(originalImageData);
+    brightness.value = 0; contrast.value = 0; // Reset sliders
+    bVal.textContent = '0';
+    cVal.textContent = '0';
+  }
+};
+
+document.getElementById('btnReset1').onclick = () => {
+  if(originalImageData){
+    putImgData(originalImageData);
+    brightness.value = 0; contrast.value = 0; // Reset sliders
+    bVal.textContent = '0';
+    cVal.textContent = '0';
+  }
 };
 
 document.getElementById('btnDownload').onclick = () => {
@@ -181,3 +214,5 @@ document.getElementById('btnDownload').onclick = () => {
     a.click();
   });
 };
+
+
